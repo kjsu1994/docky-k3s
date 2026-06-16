@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docky-app-config
+data:
+  SPRING_PROFILES_ACTIVE: docker-desktop
+  APP_CORS_ALLOWED_ORIGIN_PATTERNS: "http://localhost:8080,http://127.0.0.1:8080"
+  GOOGLE_REDIRECT_URI: "http://localhost:8080/login/oauth2/code/google"
+  NAVER_REDIRECT_URI: "http://localhost:8080/login/oauth2/code/naver"
+  S3_PRESIGNED_PUBLIC_ENDPOINT: "http://localhost:8080"

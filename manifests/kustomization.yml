@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: docky
+resources:
+  - namespace.yml
+  - config/app-config.yml
+  - config/nginx-config.yml
+  - storage/pvc.yml
+  - workloads/oracle.yml
+  - workloads/redis.yml
+  - workloads/ollama.yml
+  - workloads/minio.yml
+  - workloads/backend.yml
+  - workloads/nginx.yml
+  - network/ingress.yml
+images:
+  - name: docky/backend
+    newName: ghcr.io/kjsu1994/docky-backend
+    newTag: 20260616-k3s-001
+  - name: docky/frontend-nginx
+    newName: ghcr.io/kjsu1994/docky-frontend-nginx
+    newTag: 20260616-k3s-001

@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docky-app-config
+data:
+  TZ: Asia/Seoul
+  JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Seoul"
+  SPRING_PROFILES_ACTIVE: prod
+  APP_CORS_ALLOWED_ORIGIN_PATTERNS: "https://docky.co.kr,https://www.docky.co.kr"
+  SPRING_DATASOURCE_URL: "jdbc:oracle:thin:@//oracle:1521/XEPDB1"
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  S3_ENDPOINT: "http://minio:9000"
+  S3_PRESIGNED_PUBLIC_ENDPOINT: "https://docky.co.kr"
+  GOOGLE_REDIRECT_URI: "https://docky.co.kr/login/oauth2/code/google"
+  NAVER_REDIRECT_URI: "https://docky.co.kr/login/oauth2/code/naver"
+  PARKING_CSV_PATH: "/data/csv_data/Parking_Dataset.csv"
+  RESTROOM_CSV_PATH: "/data/csv_data/Restroom_Dataset.csv"
+  LIBRARY_CSV_PATH: "/data/csv_data/Library_Dataset.csv"
+  BUNKER_CSV_PATH: "/data/csv_data/Bunker_Dataset.csv"
+  MEDICAL_CSV_PATH: "/data/csv_data/Medical_Dataset.csv"
+  MEDICAL_LOCATION_CSV_PATH: "/data/csv_data/Medical_Location_Dataset.csv"
+  MEDICAL_GEOCODE_MAX_API_CALLS_PER_IMPORT: "10000"
+  STREAMING_STORAGE_ROOT: "/data/streaming"
+  STREAMING_FFMPEG_BINARY: "/usr/bin/ffmpeg"
+  STREAMING_FFPROBE_BINARY: "/usr/bin/ffprobe"
+  OLLAMA_ENABLED: "true"
+  OLLAMA_BASE_URL: "http://ollama:11435"
+  OLLAMA_CHAT_MODEL: "gemma4:e2b-it-qat"
+  OLLAMA_VISION_MODEL: "gemma4:e2b-it-qat"
+  OLLAMA_CONNECT_TIMEOUT_MS: "3000"
+  OLLAMA_READ_TIMEOUT_MS: "120000"
+  OLLAMA_MAX_IMAGE_BYTES: "5242880"
+  OLLAMA_MAX_IMAGES_PER_REQUEST: "4"
+  KIS_ENABLED: "true"
+  KIS_MOCK: "false"
+  SMTP_PORT: "587"
+  SMTP_AUTH: "true"
+  SMTP_STARTTLS_ENABLE: "true"
+  SIGNUP_EMAIL_VERIFICATION_EXPIRE_MINUTES: "30"

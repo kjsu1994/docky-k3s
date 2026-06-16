@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../manifests
+patches:
+  - path: app-config-docker-desktop-patch.yml
+  - path: ingress-docker-desktop-patch.yml
+images:
+  - name: ghcr.io/kjsu1994/docky-backend
+    newName: ghcr.io/kjsu1994/docky-backend
+    newTag: 20260616-k3s-001
+  - name: ghcr.io/kjsu1994/docky-frontend-nginx
+    newName: ghcr.io/kjsu1994/docky-frontend-nginx
+    newTag: 20260616-k3s-001

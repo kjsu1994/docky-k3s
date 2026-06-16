@@ -1,0 +1,33 @@
+# Runtime/generated Kubernetes state
+runtime/*
+!runtime/.gitkeep
+
+# Live data and migration backups
+backups/*
+!backups/.gitkeep
+*.dmp
+*.rdb
+*.bak
+*.backup
+
+# Docker build contexts generated from app repos
+build/*/context/*
+!build/*/context/.gitkeep
+
+# Local secrets and machine-specific files
+*.env
+*.local.yml
+*.secret.yml
+*kubeconfig*.yml
+*.kubeconfig
+
+# Logs, reports, and diagnostics
+*.log
+*.tmp
+*.pid
+
+# IDE / OS noise
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
