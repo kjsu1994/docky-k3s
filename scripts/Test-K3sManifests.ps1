@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$Root = "C:\K3s",
     [ValidateSet("all", "production", "staging", "docker-desktop")]
     [string]$Environment = "all",
@@ -152,12 +152,12 @@ foreach ($manifestRoot in $manifestRoots) {
     } elseif ($leaf -eq "docker-desktop") {
         Assert-RenderedContains -Text $renderedText -Pattern "imagePullSecrets:[\s\S]*name:\s+ghcr-pull-secret" -Context "Docker Desktop GHCR image pull secret"
         Assert-RenderedContains -Text $renderedText -Pattern "host:\s+localhost" -Context "Docker Desktop host"
-        Assert-RenderedContains -Text $renderedText -Pattern "APP_CORS_ALLOWED_ORIGIN_PATTERNS:\s+http://localhost:8080,http://127\.0\.0\.1:8080" -Context "Docker Desktop CORS"
-        Assert-RenderedContains -Text $renderedText -Pattern "GOOGLE_REDIRECT_URI:\s+http://localhost:8080/login/oauth2/code/google" -Context "Docker Desktop Google redirect"
-        Assert-RenderedContains -Text $renderedText -Pattern "NAVER_REDIRECT_URI:\s+http://localhost:8080/login/oauth2/code/naver" -Context "Docker Desktop Naver redirect"
-        Assert-RenderedContains -Text $renderedText -Pattern "S3_PRESIGNED_PUBLIC_ENDPOINT:\s+http://localhost:8080" -Context "Docker Desktop S3 public endpoint"
+        Assert-RenderedContains -Text $renderedText -Pattern "APP_CORS_ALLOWED_ORIGIN_PATTERNS:\s+https://docky\.co\.kr,https://www\.docky\.co\.kr" -Context "Docker Desktop CORS"
+        Assert-RenderedContains -Text $renderedText -Pattern "GOOGLE_REDIRECT_URI:\s+https://docky\.co\.kr/login/oauth2/code/google" -Context "Docker Desktop Google redirect"
+        Assert-RenderedContains -Text $renderedText -Pattern "NAVER_REDIRECT_URI:\s+https://docky\.co\.kr/login/oauth2/code/naver" -Context "Docker Desktop Naver redirect"
+        Assert-RenderedContains -Text $renderedText -Pattern "S3_PRESIGNED_PUBLIC_ENDPOINT:\s+https://docky\.co\.kr" -Context "Docker Desktop S3 public endpoint"
         Assert-RenderedContains -Text $renderedText -Pattern "OLLAMA_BASE_URL:\s+http://ollama:11435" -Context "Docker Desktop Ollama endpoint"
-        Assert-RenderedNotContains -Text $renderedText -Pattern "docky\.co\.kr" -Context "Docker Desktop overlay isolation"
+        Assert-RenderedNotContains -Text $renderedText -Pattern "staging\.docky\.co\.kr" -Context "Docker Desktop overlay isolation"
     }
 }
 

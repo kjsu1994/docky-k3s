@@ -52,6 +52,8 @@ $checks = @(
     @{ Path = "/api/streaming/videos"; Allowed = $AllowedApiStatuses },
     @{ Path = "/api/streaming/videos/0/hls/index.m3u8"; Allowed = $AllowedApiStatuses },
     @{ Path = "/api/admin/streaming/videos"; Allowed = $AllowedApiStatuses },
+    @{ Path = "/api/oauth2/authorization/google?remember=true"; Allowed = $AllowedProxyStatuses },
+    @{ Path = "/api/oauth2/authorization/naver?remember=true"; Allowed = $AllowedProxyStatuses },
     @{ Path = "/oauth2/authorization/google"; Allowed = $AllowedProxyStatuses },
     @{ Path = "/login/oauth2/code/google"; Allowed = $AllowedProxyStatuses },
     @{ Path = "/upload-files/__k3s_smoke_missing__"; Allowed = $AllowedProxyStatuses }
