@@ -1,6 +1,6 @@
 param(
     [string]$Root = "C:\K3s",
-    [ValidateSet("all", "production", "staging", "docker-desktop")]
+    [ValidateSet("all", "production", "production-gpu", "staging", "staging-gpu", "docker-desktop", "docker-gpu")]
     [string]$Environment = "all",
     [switch]$FailOnPlaceholderImages
 )
@@ -10,8 +10,11 @@ $ErrorActionPreference = "Stop"
 $allManifestRoots = [ordered]@{
     "ingress-nginx"   = Join-Path $Root "ingress-nginx"
     "production"      = Join-Path $Root "manifests"
+    "production-gpu"  = Join-Path $Root "overlays\production-ollama-gpu"
     "staging"         = Join-Path $Root "overlays\staging"
+    "staging-gpu"     = Join-Path $Root "overlays\staging-ollama-gpu"
     "docker-desktop"  = Join-Path $Root "overlays\docker-desktop"
+    "docker-gpu"      = Join-Path $Root "overlays\docker-desktop-ollama-gpu"
     "cloudflared"     = Join-Path $Root "cloudflared"
 }
 
@@ -20,12 +23,24 @@ $manifestRoots = switch ($Environment) {
         @($allManifestRoots["ingress-nginx"], $allManifestRoots["production"])
         break
     }
+    "production-gpu" {
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["production-gpu"])
+        break
+    }
     "staging" {
         @($allManifestRoots["ingress-nginx"], $allManifestRoots["staging"])
         break
     }
+    "staging-gpu" {
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["staging-gpu"])
+        break
+    }
     "docker-desktop" {
         @($allManifestRoots["ingress-nginx"], $allManifestRoots["docker-desktop"])
+        break
+    }
+    "docker-gpu" {
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["docker-gpu"])
         break
     }
     default {
@@ -158,6 +173,11 @@ foreach ($manifestRoot in $manifestRoots) {
         Assert-RenderedContains -Text $renderedText -Pattern "S3_PRESIGNED_PUBLIC_ENDPOINT:\s+https://docky\.co\.kr" -Context "Docker Desktop S3 public endpoint"
         Assert-RenderedContains -Text $renderedText -Pattern "OLLAMA_BASE_URL:\s+http://ollama:11435" -Context "Docker Desktop Ollama endpoint"
         Assert-RenderedNotContains -Text $renderedText -Pattern "staging\.docky\.co\.kr" -Context "Docker Desktop overlay isolation"
+    } elseif ($leaf -match "ollama-gpu$") {
+        Assert-RenderedContains -Text $renderedText -Pattern "kind:\s+StatefulSet[\s\S]*name:\s+ollama" -Context "$leaf Ollama StatefulSet"
+        Assert-RenderedContains -Text $renderedText -Pattern "name:\s+OLLAMA_FLASH_ATTENTION[\s\S]*value:\s+""1""" -Context "$leaf Ollama flash attention"
+        Assert-RenderedContains -Text $renderedText -Pattern "name:\s+NVIDIA_VISIBLE_DEVICES[\s\S]*value:\s+all" -Context "$leaf NVIDIA visible devices"
+        Assert-RenderedContains -Text $renderedText -Pattern "nvidia\.com/gpu:\s+""?1""?" -Context "$leaf NVIDIA GPU limit"
     }
 }
 

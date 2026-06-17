@@ -5,6 +5,8 @@ param(
     [string]$DockySecretPath = "C:\K3s\runtime\docky-secret.yml",
     [string]$GhcrSecretPath = "C:\K3s\runtime\ghcr-pull-secret.yml",
     [string]$Kubeconfig,
+    [ValidateSet("auto", "cpu", "gpu")]
+    [string]$OllamaGpuMode = "auto",
     [switch]$IncludeCloudflared,
     [switch]$BootstrapMinio,
     [switch]$SkipIngress
@@ -29,11 +31,60 @@ if (-not $kubectl) {
     throw "kubectl not found on PATH."
 }
 
-$appRoot = switch ($Environment) {
-    "staging" { Join-Path $Root "overlays\staging" }
-    "docker-desktop" { Join-Path $Root "overlays\docker-desktop" }
-    default { Join-Path $Root "manifests" }
+function Test-OllamaGpuResourceAvailable {
+    $nodesJson = (& kubectl get nodes -o json 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $nodesJson) {
+        return $false
+    }
+
+    $nodes = ($nodesJson -join [Environment]::NewLine) | ConvertFrom-Json
+    foreach ($node in $nodes.items) {
+        $gpu = $node.status.allocatable.'nvidia.com/gpu'
+        $gpuCount = 0
+        if (-not [string]::IsNullOrWhiteSpace($gpu) -and [int]::TryParse([string]$gpu, [ref]$gpuCount) -and $gpuCount -gt 0) {
+            return $true
+        }
+    }
+    return $false
 }
+
+function Resolve-AppRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Environment,
+        [Parameter(Mandatory = $true)]
+        [string]$Root,
+        [Parameter(Mandatory = $true)]
+        [string]$OllamaGpuMode
+    )
+
+    $cpuRoot = switch ($Environment) {
+        "staging" { Join-Path $Root "overlays\staging" }
+        "docker-desktop" { Join-Path $Root "overlays\docker-desktop" }
+        default { Join-Path $Root "manifests" }
+    }
+
+    if ($OllamaGpuMode -eq "cpu") {
+        Write-Host "Ollama GPU mode: cpu. Dry-running CPU manifest root: $cpuRoot"
+        return $cpuRoot
+    }
+
+    $gpuRoot = Join-Path $Root "overlays\$Environment-ollama-gpu"
+    if ($OllamaGpuMode -eq "gpu") {
+        Write-Host "Ollama GPU mode: gpu. Dry-running GPU manifest root: $gpuRoot"
+        return $gpuRoot
+    }
+
+    if (Test-OllamaGpuResourceAvailable) {
+        Write-Host "Ollama GPU mode: auto detected nvidia.com/gpu. Dry-running GPU manifest root: $gpuRoot"
+        return $gpuRoot
+    }
+
+    Write-Host "Ollama GPU mode: auto found no allocatable nvidia.com/gpu. Dry-running CPU manifest root: $cpuRoot"
+    return $cpuRoot
+}
+
+$appRoot = Resolve-AppRoot -Environment $Environment -Root $Root -OllamaGpuMode $OllamaGpuMode
 
 function Invoke-ServerDryRun {
     param(

@@ -126,6 +126,15 @@ rollback baseline until the final traffic switch is explicitly approved.
   `OLLAMA_ENABLED=true`.
 - `OLLAMA_CHAT_MODEL` and `OLLAMA_VISION_MODEL` are `qwen3.5:2b-q4_K_M`, and the
   model exists on `PVC/ollama-data`.
+- If Ollama GPU acceleration is expected, the target Kubernetes node advertises
+  allocatable `nvidia.com/gpu`; a host-level `nvidia-smi` result alone is not
+  sufficient for Pod scheduling.
+- `Invoke-K3sApplySequence.ps1` uses the intended `-OllamaGpuMode`: `auto`
+  selects a GPU overlay only when `nvidia.com/gpu` is available, `gpu` forces the
+  GPU overlay, and `cpu` forces CPU mode.
+- When GPU mode is selected, rendered manifests include `nvidia.com/gpu: "1"` on
+  `StatefulSet/ollama` plus `OLLAMA_FLASH_ATTENTION`,
+  `NVIDIA_VISIBLE_DEVICES`, and `NVIDIA_DRIVER_CAPABILITIES`.
 
 ## Smoke Gates
 

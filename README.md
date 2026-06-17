@@ -41,7 +41,10 @@ C:\K3s
 |   `-- rendered
 |-- overlays
 |   |-- staging
-|   `-- docker-desktop
+|   |-- staging-ollama-gpu
+|   |-- docker-desktop
+|   |-- docker-desktop-ollama-gpu
+|   `-- production-ollama-gpu
 `-- inventory.md
 ```
 
@@ -284,6 +287,27 @@ Generate a timestamped Korean rollback runbook with
    public Korea Investment API through outbound network access, and Ollama is
    routed through `Service/ollama` with `qwen3.5:2b-q4_K_M` stored on
    `PVC/ollama-data`.
+
+   Ollama is CPU-safe by default. `Invoke-K3sApplySequence.ps1` defaults to
+   `-OllamaGpuMode auto`: if the target cluster advertises allocatable
+   `nvidia.com/gpu`, it applies the matching `*-ollama-gpu` overlay; otherwise
+   it falls back to the CPU manifest root. Use `-OllamaGpuMode gpu` to force the
+   GPU overlay, or `-OllamaGpuMode cpu` to force the CPU path.
+
+   The GPU overlays request one NVIDIA GPU for `StatefulSet/ollama` and set
+   `OLLAMA_FLASH_ATTENTION=1`, `NVIDIA_VISIBLE_DEVICES=all`, and
+   `NVIDIA_DRIVER_CAPABILITIES=compute,utility`. A GPU visible to Windows
+   through `nvidia-smi` is not enough by itself; the Kubernetes node must expose
+   `nvidia.com/gpu`, usually through the NVIDIA Container Toolkit and NVIDIA
+   Kubernetes device plugin. Check the active node before expecting GPU
+   scheduling:
+
+   ```powershell
+   kubectl describe node <node-name> | Select-String "nvidia.com/gpu"
+   ```
+
+   See the NVIDIA device plugin documentation for the `nvidia.com/gpu` resource
+   model: https://github.com/NVIDIA/k8s-device-plugin
 
    `Test-K3sStoragePlan.ps1` validates the expected PVCs and can compare PVC
    requests against backup or Compose data sizes. The Compose scan is read-only:

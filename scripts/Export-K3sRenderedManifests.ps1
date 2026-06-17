@@ -3,6 +3,8 @@ param(
     [string]$Environment = "staging",
     [string]$Root = "C:\K3s",
     [string]$OutputRoot = "C:\K3s\runtime\rendered",
+    [ValidateSet("auto", "cpu", "gpu")]
+    [string]$OllamaGpuMode = "cpu",
     [switch]$IncludeCloudflared,
     [switch]$IncludeMinioBootstrapJob
 )
@@ -31,11 +33,60 @@ if (-not $resolvedOutputDir.StartsWith($renderRoot + "\", [System.StringComparis
     throw "Output directory must stay under C:\K3s\runtime\rendered: $resolvedOutputDir"
 }
 
-$appRoot = switch ($Environment) {
-    "staging" { Join-Path $Root "overlays\staging" }
-    "docker-desktop" { Join-Path $Root "overlays\docker-desktop" }
-    default { Join-Path $Root "manifests" }
+function Test-OllamaGpuResourceAvailable {
+    $nodesJson = (& kubectl get nodes -o json 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $nodesJson) {
+        return $false
+    }
+
+    $nodes = ($nodesJson -join [Environment]::NewLine) | ConvertFrom-Json
+    foreach ($node in $nodes.items) {
+        $gpu = $node.status.allocatable.'nvidia.com/gpu'
+        $gpuCount = 0
+        if (-not [string]::IsNullOrWhiteSpace($gpu) -and [int]::TryParse([string]$gpu, [ref]$gpuCount) -and $gpuCount -gt 0) {
+            return $true
+        }
+    }
+    return $false
 }
+
+function Resolve-AppRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Environment,
+        [Parameter(Mandatory = $true)]
+        [string]$Root,
+        [Parameter(Mandatory = $true)]
+        [string]$OllamaGpuMode
+    )
+
+    $cpuRoot = switch ($Environment) {
+        "staging" { Join-Path $Root "overlays\staging" }
+        "docker-desktop" { Join-Path $Root "overlays\docker-desktop" }
+        default { Join-Path $Root "manifests" }
+    }
+
+    if ($OllamaGpuMode -eq "cpu") {
+        Write-Host "Ollama GPU mode: cpu. Rendering CPU manifest root: $cpuRoot"
+        return $cpuRoot
+    }
+
+    $gpuRoot = Join-Path $Root "overlays\$Environment-ollama-gpu"
+    if ($OllamaGpuMode -eq "gpu") {
+        Write-Host "Ollama GPU mode: gpu. Rendering GPU manifest root: $gpuRoot"
+        return $gpuRoot
+    }
+
+    if (Test-OllamaGpuResourceAvailable) {
+        Write-Host "Ollama GPU mode: auto detected nvidia.com/gpu. Rendering GPU manifest root: $gpuRoot"
+        return $gpuRoot
+    }
+
+    Write-Host "Ollama GPU mode: auto found no allocatable nvidia.com/gpu. Rendering CPU manifest root: $cpuRoot"
+    return $cpuRoot
+}
+
+$appRoot = Resolve-AppRoot -Environment $Environment -Root $Root -OllamaGpuMode $OllamaGpuMode
 
 function Export-KustomizeRoot {
     param(
@@ -77,6 +128,7 @@ $metadata = [ordered]@{
     environment = $Environment
     includeCloudflared = [bool]$IncludeCloudflared
     includeMinioBootstrapJob = [bool]$IncludeMinioBootstrapJob
+    ollamaGpuMode = $OllamaGpuMode
     root = (Resolve-Path $Root).Path
     appRoot = (Resolve-Path $appRoot).Path
     outputDir = $resolvedOutputDir

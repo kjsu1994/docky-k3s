@@ -9,6 +9,8 @@ param(
     [switch]$BootstrapMinio,
     [switch]$SkipRenderSnapshot,
     [switch]$SkipServerDryRun,
+    [ValidateSet("auto", "cpu", "gpu")]
+    [string]$OllamaGpuMode = "auto",
     [switch]$ConfirmApply
 )
 
@@ -29,11 +31,60 @@ if (-not [string]::IsNullOrWhiteSpace($Kubeconfig)) {
     Write-Host "Using KUBECONFIG: $env:KUBECONFIG"
 }
 
-$appRoot = switch ($Environment) {
-    "staging" { Join-Path $root "overlays\staging" }
-    "docker-desktop" { Join-Path $root "overlays\docker-desktop" }
-    default { Join-Path $root "manifests" }
+function Test-OllamaGpuResourceAvailable {
+    $nodesJson = (& kubectl get nodes -o json 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $nodesJson) {
+        return $false
+    }
+
+    $nodes = ($nodesJson -join [Environment]::NewLine) | ConvertFrom-Json
+    foreach ($node in $nodes.items) {
+        $gpu = $node.status.allocatable.'nvidia.com/gpu'
+        $gpuCount = 0
+        if (-not [string]::IsNullOrWhiteSpace($gpu) -and [int]::TryParse([string]$gpu, [ref]$gpuCount) -and $gpuCount -gt 0) {
+            return $true
+        }
+    }
+    return $false
 }
+
+function Resolve-AppRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Environment,
+        [Parameter(Mandatory = $true)]
+        [string]$Root,
+        [Parameter(Mandatory = $true)]
+        [string]$OllamaGpuMode
+    )
+
+    $cpuRoot = switch ($Environment) {
+        "staging" { Join-Path $Root "overlays\staging" }
+        "docker-desktop" { Join-Path $Root "overlays\docker-desktop" }
+        default { Join-Path $Root "manifests" }
+    }
+
+    if ($OllamaGpuMode -eq "cpu") {
+        Write-Host "Ollama GPU mode: cpu. Using CPU manifest root: $cpuRoot"
+        return $cpuRoot
+    }
+
+    $gpuRoot = Join-Path $Root "overlays\$Environment-ollama-gpu"
+    if ($OllamaGpuMode -eq "gpu") {
+        Write-Host "Ollama GPU mode: gpu. Using GPU manifest root: $gpuRoot"
+        return $gpuRoot
+    }
+
+    if (Test-OllamaGpuResourceAvailable) {
+        Write-Host "Ollama GPU mode: auto detected nvidia.com/gpu. Using GPU manifest root: $gpuRoot"
+        return $gpuRoot
+    }
+
+    Write-Host "Ollama GPU mode: auto found no allocatable nvidia.com/gpu. Falling back to CPU manifest root: $cpuRoot"
+    return $cpuRoot
+}
+
+$appRoot = Resolve-AppRoot -Environment $Environment -Root $root -OllamaGpuMode $OllamaGpuMode
 
 $gateArgs = @(
     "-Environment", $Environment,
@@ -60,7 +111,8 @@ if ($LASTEXITCODE -ne 0) {
 
 if (-not $SkipRenderSnapshot) {
     $renderArgs = @(
-        "-Environment", $Environment
+        "-Environment", $Environment,
+        "-OllamaGpuMode", $OllamaGpuMode
     )
     if ($IncludeCloudflared) {
         $renderArgs += "-IncludeCloudflared"
@@ -84,7 +136,8 @@ if (-not $SkipServerDryRun) {
     $serverDryRunArgs = @(
         "-Environment", $Environment,
         "-DockySecretPath", $DockySecretPath,
-        "-GhcrSecretPath", $GhcrSecretPath
+        "-GhcrSecretPath", $GhcrSecretPath,
+        "-OllamaGpuMode", $OllamaGpuMode
     )
     if (-not [string]::IsNullOrWhiteSpace($Kubeconfig)) {
         $serverDryRunArgs += @("-Kubeconfig", $Kubeconfig)
