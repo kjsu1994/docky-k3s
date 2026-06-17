@@ -16,7 +16,7 @@ resources:
 images:
   - name: docky/backend
     newName: ghcr.io/kjsu1994/docky-backend
-    newTag: 20260616-k3s-001
+    newTag: 20260617-183055
   - name: docky/frontend-nginx
     newName: ghcr.io/kjsu1994/docky-frontend-nginx
-    newTag: 20260616-k3s-001
+    newTag: 20260617-183055
