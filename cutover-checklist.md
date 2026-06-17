@@ -124,7 +124,7 @@ rollback baseline until the final traffic switch is explicitly approved.
 - IoT routes and `iot-external` are not rendered; IoT is intentionally retired.
 - Ollama is reachable in-cluster through `Service/ollama` on port `11435` when
   `OLLAMA_ENABLED=true`.
-- `OLLAMA_CHAT_MODEL` and `OLLAMA_VISION_MODEL` are `gemma4:e2b-it-qat`, and the
+- `OLLAMA_CHAT_MODEL` and `OLLAMA_VISION_MODEL` are `qwen3.5:2b-q4_K_M`, and the
   model exists on `PVC/ollama-data`.
 
 ## Smoke Gates

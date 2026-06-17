@@ -8,7 +8,7 @@ patches:
 images:
   - name: ghcr.io/kjsu1994/docky-backend
     newName: ghcr.io/kjsu1994/docky-backend
-    newTag: 20260617-183055
+    newTag: 20260617-ollama-qwen-fix
   - name: ghcr.io/kjsu1994/docky-frontend-nginx
     newName: ghcr.io/kjsu1994/docky-frontend-nginx
     newTag: 20260617-183055

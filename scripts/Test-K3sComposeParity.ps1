@@ -2,7 +2,7 @@ param(
     [string]$Root = "C:\K3s",
     [string]$ComposeEnvPath = "C:\compose\.env",
     [switch]$FailOnMismatch,
-    [string]$ExpectedOllamaModel = "gemma4:e2b-it-qat"
+    [string]$ExpectedOllamaModel = "qwen3.5:2b-q4_K_M"
 )
 
 $ErrorActionPreference = "Stop"

@@ -282,7 +282,7 @@ Generate a timestamped Korean rollback runbook with
 
    Compose has KIS and Ollama enabled. K3s keeps that behavior: KIS uses the
    public Korea Investment API through outbound network access, and Ollama is
-   routed through `Service/ollama` with `gemma4:e2b-it-qat` stored on
+   routed through `Service/ollama` with `qwen3.5:2b-q4_K_M` stored on
    `PVC/ollama-data`.
 
    `Test-K3sStoragePlan.ps1` validates the expected PVCs and can compare PVC
