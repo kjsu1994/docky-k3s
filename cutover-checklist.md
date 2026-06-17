@@ -126,6 +126,12 @@ rollback baseline until the final traffic switch is explicitly approved.
   `OLLAMA_ENABLED=true`.
 - `OLLAMA_CHAT_MODEL` and `OLLAMA_VISION_MODEL` are `qwen3.5:2b-q4_K_M`, and the
   model exists on `PVC/ollama-data`.
+- `Invoke-K3sApplySequence.ps1` installs the vendored NVIDIA device plugin when
+  `-OllamaGpuMode auto` or `-OllamaGpuMode gpu` is used, unless
+  `-SkipNvidiaDevicePlugin` is explicitly passed.
+- NVIDIA device plugin images are pinned by digest and render from
+  `C:\K3s\nvidia-device-plugin`; the RuntimeClass retry path renders from
+  `C:\K3s\nvidia-device-plugin-runtimeclass`.
 - If Ollama GPU acceleration is expected, the target Kubernetes node advertises
   allocatable `nvidia.com/gpu`; a host-level `nvidia-smi` result alone is not
   sufficient for Pod scheduling.
@@ -135,6 +141,10 @@ rollback baseline until the final traffic switch is explicitly approved.
 - When GPU mode is selected, rendered manifests include `nvidia.com/gpu: "1"` on
   `StatefulSet/ollama` plus `OLLAMA_FLASH_ATTENTION`,
   `NVIDIA_VISIBLE_DEVICES`, and `NVIDIA_DRIVER_CAPABILITIES`.
+- If the RuntimeClass retry is required, the rendered Ollama overlay includes
+  `runtimeClassName: nvidia`; if the target reports `RuntimeHandler "nvidia" not
+  supported`, CPU fallback is expected until the Kubernetes container runtime is
+  configured for NVIDIA.
 
 ## Smoke Gates
 

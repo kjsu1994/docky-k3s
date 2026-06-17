@@ -35,6 +35,8 @@ C:\K3s
 |   |-- storage
 |   |-- workloads
 |   `-- kustomization.yml
+|-- nvidia-device-plugin
+|-- nvidia-device-plugin-runtimeclass
 |-- scripts
 |-- runtime
 |   |-- diagnostics
@@ -42,9 +44,12 @@ C:\K3s
 |-- overlays
 |   |-- staging
 |   |-- staging-ollama-gpu
+|   |-- staging-ollama-gpu-runtimeclass
 |   |-- docker-desktop
 |   |-- docker-desktop-ollama-gpu
-|   `-- production-ollama-gpu
+|   |-- docker-desktop-ollama-gpu-runtimeclass
+|   |-- production-ollama-gpu
+|   `-- production-ollama-gpu-runtimeclass
 `-- inventory.md
 ```
 
@@ -289,10 +294,24 @@ Generate a timestamped Korean rollback runbook with
    `PVC/ollama-data`.
 
    Ollama is CPU-safe by default. `Invoke-K3sApplySequence.ps1` defaults to
-   `-OllamaGpuMode auto`: if the target cluster advertises allocatable
-   `nvidia.com/gpu`, it applies the matching `*-ollama-gpu` overlay; otherwise
-   it falls back to the CPU manifest root. Use `-OllamaGpuMode gpu` to force the
-   GPU overlay, or `-OllamaGpuMode cpu` to force the CPU path.
+   `-OllamaGpuMode auto`: it installs the vendored NVIDIA device plugin from
+   `nvidia-device-plugin`, waits briefly for allocatable `nvidia.com/gpu`, and
+   applies the matching `*-ollama-gpu` overlay only when Kubernetes exposes a
+   GPU. If no GPU is exposed, it falls back to the CPU manifest root.
+
+   If the first plugin attempt does not expose a GPU, the apply sequence retries
+   the plugin through `nvidia-device-plugin-runtimeclass`, which uses
+   `runtimeClassName: nvidia`. When that retry is the path that exposes GPU
+   resources, the app render uses the matching `*-ollama-gpu-runtimeclass`
+   overlay so Ollama also runs with `runtimeClassName: nvidia`. If the runtime
+   handler is not supported, the script restores the safe plugin manifest and
+   keeps CPU fallback.
+
+   Use `-OllamaGpuMode gpu` to require GPU and fail the apply if Kubernetes
+   still does not advertise `nvidia.com/gpu`. Use `-OllamaGpuMode cpu` to force
+   CPU mode and skip the automatic device-plugin install. Use
+   `-SkipNvidiaDevicePlugin` only when the target cluster manages NVIDIA GPU
+   enablement separately.
 
    The GPU overlays request one NVIDIA GPU for `StatefulSet/ollama` and set
    `OLLAMA_FLASH_ATTENTION=1`, `NVIDIA_VISIBLE_DEVICES=all`, and
@@ -308,6 +327,13 @@ Generate a timestamped Korean rollback runbook with
 
    See the NVIDIA device plugin documentation for the `nvidia.com/gpu` resource
    model: https://github.com/NVIDIA/k8s-device-plugin
+
+   Docker Desktop on Windows may register an `nvidia` runtime for Docker while
+   its Kubernetes containerd runtime still does not support the `nvidia`
+   RuntimeClass. In that case the device plugin stays Running with
+   `FAIL_ON_INIT_ERROR=false`, logs `No devices found`, and `auto` correctly
+   uses CPU mode until Docker Desktop/Kubernetes GPU runtime support is
+   configured.
 
    `Test-K3sStoragePlan.ps1` validates the expected PVCs and can compare PVC
    requests against backup or Compose data sizes. The Compose scan is read-only:

@@ -1,6 +1,6 @@
 param(
     [string]$Root = "C:\K3s",
-    [ValidateSet("all", "production", "production-gpu", "staging", "staging-gpu", "docker-desktop", "docker-gpu")]
+    [ValidateSet("all", "production", "production-gpu", "production-gpu-runtimeclass", "staging", "staging-gpu", "staging-gpu-runtimeclass", "docker-desktop", "docker-gpu", "docker-gpu-runtimeclass")]
     [string]$Environment = "all",
     [switch]$FailOnPlaceholderImages
 )
@@ -9,38 +9,55 @@ $ErrorActionPreference = "Stop"
 
 $allManifestRoots = [ordered]@{
     "ingress-nginx"   = Join-Path $Root "ingress-nginx"
+    "nvidia-device-plugin" = Join-Path $Root "nvidia-device-plugin"
+    "nvidia-device-plugin-runtimeclass" = Join-Path $Root "nvidia-device-plugin-runtimeclass"
     "production"      = Join-Path $Root "manifests"
     "production-gpu"  = Join-Path $Root "overlays\production-ollama-gpu"
+    "production-gpu-runtimeclass" = Join-Path $Root "overlays\production-ollama-gpu-runtimeclass"
     "staging"         = Join-Path $Root "overlays\staging"
     "staging-gpu"     = Join-Path $Root "overlays\staging-ollama-gpu"
+    "staging-gpu-runtimeclass" = Join-Path $Root "overlays\staging-ollama-gpu-runtimeclass"
     "docker-desktop"  = Join-Path $Root "overlays\docker-desktop"
     "docker-gpu"      = Join-Path $Root "overlays\docker-desktop-ollama-gpu"
+    "docker-gpu-runtimeclass" = Join-Path $Root "overlays\docker-desktop-ollama-gpu-runtimeclass"
     "cloudflared"     = Join-Path $Root "cloudflared"
 }
 
 $manifestRoots = switch ($Environment) {
     "production" {
-        @($allManifestRoots["ingress-nginx"], $allManifestRoots["production"])
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["production"])
         break
     }
     "production-gpu" {
-        @($allManifestRoots["ingress-nginx"], $allManifestRoots["production-gpu"])
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["production-gpu"])
+        break
+    }
+    "production-gpu-runtimeclass" {
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["production-gpu-runtimeclass"])
         break
     }
     "staging" {
-        @($allManifestRoots["ingress-nginx"], $allManifestRoots["staging"])
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["staging"])
         break
     }
     "staging-gpu" {
-        @($allManifestRoots["ingress-nginx"], $allManifestRoots["staging-gpu"])
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["staging-gpu"])
+        break
+    }
+    "staging-gpu-runtimeclass" {
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["staging-gpu-runtimeclass"])
         break
     }
     "docker-desktop" {
-        @($allManifestRoots["ingress-nginx"], $allManifestRoots["docker-desktop"])
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["docker-desktop"])
         break
     }
     "docker-gpu" {
-        @($allManifestRoots["ingress-nginx"], $allManifestRoots["docker-gpu"])
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["docker-gpu"])
+        break
+    }
+    "docker-gpu-runtimeclass" {
+        @($allManifestRoots["ingress-nginx"], $allManifestRoots["nvidia-device-plugin"], $allManifestRoots["nvidia-device-plugin-runtimeclass"], $allManifestRoots["docker-gpu-runtimeclass"])
         break
     }
     default {
@@ -124,7 +141,19 @@ foreach ($manifestRoot in $manifestRoots) {
     }
 
     $leaf = Split-Path -Leaf $manifestRoot
-    if ($leaf -eq "manifests") {
+    if ($leaf -eq "nvidia-device-plugin") {
+        Assert-RenderedContains -Text $renderedText -Pattern "kind:\s+DaemonSet[\s\S]*name:\s+nvidia-device-plugin-daemonset" -Context "NVIDIA device plugin DaemonSet"
+        Assert-RenderedContains -Text $renderedText -Pattern "namespace:\s+kube-system" -Context "NVIDIA device plugin namespace"
+        Assert-RenderedContains -Text $renderedText -Pattern "image:\s+nvcr\.io/nvidia/k8s-device-plugin@sha256:[a-fA-F0-9]{64}" -Context "NVIDIA device plugin pinned image"
+        Assert-RenderedContains -Text $renderedText -Pattern "kind:\s+RuntimeClass" -Context "NVIDIA RuntimeClass kind"
+        Assert-RenderedContains -Text $renderedText -Pattern "handler:\s+nvidia" -Context "NVIDIA RuntimeClass handler"
+        Assert-RenderedContains -Text $renderedText -Pattern "name:\s+FAIL_ON_INIT_ERROR[\s\S]*value:\s+""false""" -Context "NVIDIA device plugin no-GPU fallback"
+    } elseif ($leaf -eq "nvidia-device-plugin-runtimeclass") {
+        Assert-RenderedContains -Text $renderedText -Pattern "kind:\s+DaemonSet[\s\S]*name:\s+nvidia-device-plugin-daemonset" -Context "NVIDIA RuntimeClass retry DaemonSet"
+        Assert-RenderedContains -Text $renderedText -Pattern "runtimeClassName:\s+nvidia" -Context "NVIDIA RuntimeClass retry"
+        Assert-RenderedContains -Text $renderedText -Pattern "kind:\s+RuntimeClass" -Context "NVIDIA RuntimeClass retry kind"
+        Assert-RenderedContains -Text $renderedText -Pattern "handler:\s+nvidia" -Context "NVIDIA RuntimeClass retry handler"
+    } elseif ($leaf -eq "manifests") {
         foreach ($pattern in @(
             "kind:\s+PersistentVolumeClaim[\s\S]*name:\s+oracle-data",
             "kind:\s+PersistentVolumeClaim[\s\S]*name:\s+minio-data",
@@ -177,6 +206,11 @@ foreach ($manifestRoot in $manifestRoots) {
         Assert-RenderedContains -Text $renderedText -Pattern "kind:\s+StatefulSet[\s\S]*name:\s+ollama" -Context "$leaf Ollama StatefulSet"
         Assert-RenderedContains -Text $renderedText -Pattern "name:\s+OLLAMA_FLASH_ATTENTION[\s\S]*value:\s+""1""" -Context "$leaf Ollama flash attention"
         Assert-RenderedContains -Text $renderedText -Pattern "name:\s+NVIDIA_VISIBLE_DEVICES[\s\S]*value:\s+all" -Context "$leaf NVIDIA visible devices"
+        Assert-RenderedContains -Text $renderedText -Pattern "nvidia\.com/gpu:\s+""?1""?" -Context "$leaf NVIDIA GPU limit"
+        Assert-RenderedNotContains -Text $renderedText -Pattern "runtimeClassName:\s+nvidia" -Context "$leaf default runtime selection"
+    } elseif ($leaf -match "ollama-gpu-runtimeclass$") {
+        Assert-RenderedContains -Text $renderedText -Pattern "kind:\s+StatefulSet[\s\S]*name:\s+ollama" -Context "$leaf Ollama StatefulSet"
+        Assert-RenderedContains -Text $renderedText -Pattern "runtimeClassName:\s+nvidia" -Context "$leaf NVIDIA RuntimeClass"
         Assert-RenderedContains -Text $renderedText -Pattern "nvidia\.com/gpu:\s+""?1""?" -Context "$leaf NVIDIA GPU limit"
     }
 }

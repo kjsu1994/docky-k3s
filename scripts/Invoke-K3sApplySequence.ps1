@@ -11,6 +11,8 @@ param(
     [switch]$SkipServerDryRun,
     [ValidateSet("auto", "cpu", "gpu")]
     [string]$OllamaGpuMode = "auto",
+    [switch]$SkipNvidiaDevicePlugin,
+    [int]$OllamaGpuDetectionTimeoutSeconds = 45,
     [switch]$ConfirmApply
 )
 
@@ -48,6 +50,67 @@ function Test-OllamaGpuResourceAvailable {
     return $false
 }
 
+function Wait-OllamaGpuResourceAvailable {
+    param(
+        [int]$TimeoutSeconds = 45,
+        [int]$PollSeconds = 5
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        if (Test-OllamaGpuResourceAvailable) {
+            return $true
+        }
+        Start-Sleep -Seconds $PollSeconds
+    } while ((Get-Date) -lt $deadline)
+
+    return $false
+}
+
+function Install-NvidiaDevicePlugin {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Root,
+        [Parameter(Mandatory = $true)]
+        [string]$OllamaGpuMode,
+        [switch]$UseRuntimeClass
+    )
+
+    $pluginRootName = if ($UseRuntimeClass) { "nvidia-device-plugin-runtimeclass" } else { "nvidia-device-plugin" }
+    $pluginRoot = Join-Path $Root $pluginRootName
+    if (-not (Test-Path $pluginRoot)) {
+        $message = "NVIDIA device plugin manifest root not found: $pluginRoot"
+        if ($OllamaGpuMode -eq "auto") {
+            Write-Warning $message
+            return $false
+        }
+        throw $message
+    }
+
+    Write-Host "Installing NVIDIA device plugin from $pluginRoot"
+    kubectl apply -k $pluginRoot
+    if ($LASTEXITCODE -ne 0) {
+        $message = "Failed to apply NVIDIA device plugin."
+        if ($OllamaGpuMode -eq "auto") {
+            Write-Warning "$message Falling back to CPU if no GPU is already allocatable."
+            return $false
+        }
+        throw $message
+    }
+
+    kubectl rollout status daemonset/nvidia-device-plugin-daemonset -n kube-system --timeout=120s
+    if ($LASTEXITCODE -ne 0) {
+        $message = "NVIDIA device plugin rollout did not complete."
+        if ($OllamaGpuMode -eq "auto") {
+            Write-Warning "$message Falling back to CPU if no GPU is already allocatable."
+            return $false
+        }
+        throw $message
+    }
+
+    return $true
+}
+
 function Resolve-AppRoot {
     param(
         [Parameter(Mandatory = $true)]
@@ -55,7 +118,8 @@ function Resolve-AppRoot {
         [Parameter(Mandatory = $true)]
         [string]$Root,
         [Parameter(Mandatory = $true)]
-        [string]$OllamaGpuMode
+        [string]$OllamaGpuMode,
+        [bool]$UseRuntimeClass = $false
     )
 
     $cpuRoot = switch ($Environment) {
@@ -69,7 +133,8 @@ function Resolve-AppRoot {
         return $cpuRoot
     }
 
-    $gpuRoot = Join-Path $Root "overlays\$Environment-ollama-gpu"
+    $gpuOverlayName = if ($UseRuntimeClass) { "$Environment-ollama-gpu-runtimeclass" } else { "$Environment-ollama-gpu" }
+    $gpuRoot = Join-Path $Root "overlays\$gpuOverlayName"
     if ($OllamaGpuMode -eq "gpu") {
         Write-Host "Ollama GPU mode: gpu. Using GPU manifest root: $gpuRoot"
         return $gpuRoot
@@ -83,8 +148,6 @@ function Resolve-AppRoot {
     Write-Host "Ollama GPU mode: auto found no allocatable nvidia.com/gpu. Falling back to CPU manifest root: $cpuRoot"
     return $cpuRoot
 }
-
-$appRoot = Resolve-AppRoot -Environment $Environment -Root $root -OllamaGpuMode $OllamaGpuMode
 
 $gateArgs = @(
     "-Environment", $Environment,
@@ -109,11 +172,49 @@ if ($LASTEXITCODE -ne 0) {
     throw "Cutover gate failed."
 }
 
+$useOllamaRuntimeClass = $false
+if ($OllamaGpuMode -ne "cpu" -and -not $SkipNvidiaDevicePlugin) {
+    $pluginInstalled = Install-NvidiaDevicePlugin -Root $root -OllamaGpuMode $OllamaGpuMode
+    if ($pluginInstalled) {
+        if (Wait-OllamaGpuResourceAvailable -TimeoutSeconds $OllamaGpuDetectionTimeoutSeconds) {
+            Write-Host "NVIDIA GPU resource detected on the target cluster."
+        } else {
+            Write-Warning "NVIDIA device plugin is installed, but no allocatable nvidia.com/gpu resource was detected. Retrying with RuntimeClass/nvidia."
+            $runtimeClassPluginInstalled = Install-NvidiaDevicePlugin -Root $root -OllamaGpuMode $OllamaGpuMode -UseRuntimeClass
+            if ($runtimeClassPluginInstalled -and (Wait-OllamaGpuResourceAvailable -TimeoutSeconds $OllamaGpuDetectionTimeoutSeconds)) {
+                Write-Host "NVIDIA GPU resource detected with RuntimeClass/nvidia."
+                $useOllamaRuntimeClass = $true
+            } else {
+                if (-not $runtimeClassPluginInstalled -and $OllamaGpuMode -eq "auto") {
+                    Write-Warning "Restoring NVIDIA device plugin without RuntimeClass/nvidia before CPU fallback."
+                    Install-NvidiaDevicePlugin -Root $root -OllamaGpuMode $OllamaGpuMode | Out-Null
+                }
+                $message = "NVIDIA device plugin is installed, but no allocatable nvidia.com/gpu resource was detected."
+                if ($OllamaGpuMode -eq "gpu") {
+                    throw $message
+                }
+                Write-Warning "$message Ollama will use the CPU manifest root."
+            }
+        }
+    }
+} elseif ($OllamaGpuMode -ne "cpu" -and $SkipNvidiaDevicePlugin) {
+    Write-Host "Skipping NVIDIA device plugin install because -SkipNvidiaDevicePlugin was passed."
+}
+
+if ($OllamaGpuMode -eq "gpu" -and -not (Test-OllamaGpuResourceAvailable)) {
+    throw "Ollama GPU mode was forced, but the cluster does not advertise allocatable nvidia.com/gpu."
+}
+
+$appRoot = Resolve-AppRoot -Environment $Environment -Root $root -OllamaGpuMode $OllamaGpuMode -UseRuntimeClass $useOllamaRuntimeClass
+
 if (-not $SkipRenderSnapshot) {
     $renderArgs = @(
         "-Environment", $Environment,
         "-OllamaGpuMode", $OllamaGpuMode
     )
+    if ($useOllamaRuntimeClass) {
+        $renderArgs += "-UseOllamaRuntimeClass"
+    }
     if ($IncludeCloudflared) {
         $renderArgs += "-IncludeCloudflared"
     }
@@ -147,6 +248,12 @@ if (-not $SkipServerDryRun) {
     }
     if ($BootstrapMinio) {
         $serverDryRunArgs += "-BootstrapMinio"
+    }
+    if ($SkipNvidiaDevicePlugin) {
+        $serverDryRunArgs += "-SkipNvidiaDevicePlugin"
+    }
+    if ($useOllamaRuntimeClass) {
+        $serverDryRunArgs += "-UseOllamaRuntimeClass"
     }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts\Test-K3sServerDryRun.ps1") @serverDryRunArgs
     if ($LASTEXITCODE -ne 0) {

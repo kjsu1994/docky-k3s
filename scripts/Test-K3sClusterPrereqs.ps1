@@ -129,7 +129,9 @@ if (-not $SkipAuthChecks) {
         @{ Verb = "create"; Resource = "statefulsets.apps"; Namespace = "docky" },
         @{ Verb = "create"; Resource = "persistentvolumeclaims"; Namespace = "docky" },
         @{ Verb = "create"; Resource = "ingresses.networking.k8s.io"; Namespace = "docky" },
-        @{ Verb = "create"; Resource = "jobs.batch"; Namespace = "docky" }
+        @{ Verb = "create"; Resource = "jobs.batch"; Namespace = "docky" },
+        @{ Verb = "create"; Resource = "daemonsets.apps"; Namespace = "kube-system" },
+        @{ Verb = "create"; Resource = "runtimeclasses.node.k8s.io"; Namespace = $null }
     )
     foreach ($check in $authChecks) {
         $authArgs = @("auth", "can-i", $check.Verb, $check.Resource)

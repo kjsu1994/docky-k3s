@@ -7,6 +7,8 @@ param(
     [string]$Kubeconfig,
     [ValidateSet("auto", "cpu", "gpu")]
     [string]$OllamaGpuMode = "auto",
+    [switch]$SkipNvidiaDevicePlugin,
+    [switch]$UseOllamaRuntimeClass,
     [switch]$IncludeCloudflared,
     [switch]$BootstrapMinio,
     [switch]$SkipIngress
@@ -55,7 +57,8 @@ function Resolve-AppRoot {
         [Parameter(Mandatory = $true)]
         [string]$Root,
         [Parameter(Mandatory = $true)]
-        [string]$OllamaGpuMode
+        [string]$OllamaGpuMode,
+        [bool]$UseRuntimeClass = $false
     )
 
     $cpuRoot = switch ($Environment) {
@@ -69,7 +72,8 @@ function Resolve-AppRoot {
         return $cpuRoot
     }
 
-    $gpuRoot = Join-Path $Root "overlays\$Environment-ollama-gpu"
+    $gpuOverlayName = if ($UseRuntimeClass) { "$Environment-ollama-gpu-runtimeclass" } else { "$Environment-ollama-gpu" }
+    $gpuRoot = Join-Path $Root "overlays\$gpuOverlayName"
     if ($OllamaGpuMode -eq "gpu") {
         Write-Host "Ollama GPU mode: gpu. Dry-running GPU manifest root: $gpuRoot"
         return $gpuRoot
@@ -84,7 +88,7 @@ function Resolve-AppRoot {
     return $cpuRoot
 }
 
-$appRoot = Resolve-AppRoot -Environment $Environment -Root $Root -OllamaGpuMode $OllamaGpuMode
+$appRoot = Resolve-AppRoot -Environment $Environment -Root $Root -OllamaGpuMode $OllamaGpuMode -UseRuntimeClass ([bool]$UseOllamaRuntimeClass)
 
 function Invoke-ServerDryRun {
     param(
@@ -135,6 +139,15 @@ if ($Environment -ne "docker-desktop") {
 if (-not $SkipIngress) {
     Invoke-ServerDryRun -Description "ingress-nginx" -KubectlArgs @(
         "apply", "--dry-run=server", "-k", (Join-Path $Root "ingress-nginx")
+    )
+}
+
+if ($OllamaGpuMode -ne "cpu" -and -not $SkipNvidiaDevicePlugin) {
+    Invoke-ServerDryRun -Description "NVIDIA device plugin" -KubectlArgs @(
+        "apply", "--dry-run=server", "-k", (Join-Path $Root "nvidia-device-plugin")
+    )
+    Invoke-ServerDryRun -Description "NVIDIA device plugin RuntimeClass retry overlay" -KubectlArgs @(
+        "apply", "--dry-run=server", "-k", (Join-Path $Root "nvidia-device-plugin-runtimeclass")
     )
 }
 

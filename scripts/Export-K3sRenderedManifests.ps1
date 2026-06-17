@@ -5,6 +5,7 @@ param(
     [string]$OutputRoot = "C:\K3s\runtime\rendered",
     [ValidateSet("auto", "cpu", "gpu")]
     [string]$OllamaGpuMode = "cpu",
+    [switch]$UseOllamaRuntimeClass,
     [switch]$IncludeCloudflared,
     [switch]$IncludeMinioBootstrapJob
 )
@@ -57,7 +58,8 @@ function Resolve-AppRoot {
         [Parameter(Mandatory = $true)]
         [string]$Root,
         [Parameter(Mandatory = $true)]
-        [string]$OllamaGpuMode
+        [string]$OllamaGpuMode,
+        [bool]$UseRuntimeClass = $false
     )
 
     $cpuRoot = switch ($Environment) {
@@ -71,7 +73,8 @@ function Resolve-AppRoot {
         return $cpuRoot
     }
 
-    $gpuRoot = Join-Path $Root "overlays\$Environment-ollama-gpu"
+    $gpuOverlayName = if ($UseRuntimeClass) { "$Environment-ollama-gpu-runtimeclass" } else { "$Environment-ollama-gpu" }
+    $gpuRoot = Join-Path $Root "overlays\$gpuOverlayName"
     if ($OllamaGpuMode -eq "gpu") {
         Write-Host "Ollama GPU mode: gpu. Rendering GPU manifest root: $gpuRoot"
         return $gpuRoot
@@ -86,7 +89,7 @@ function Resolve-AppRoot {
     return $cpuRoot
 }
 
-$appRoot = Resolve-AppRoot -Environment $Environment -Root $Root -OllamaGpuMode $OllamaGpuMode
+$appRoot = Resolve-AppRoot -Environment $Environment -Root $Root -OllamaGpuMode $OllamaGpuMode -UseRuntimeClass ([bool]$UseOllamaRuntimeClass)
 
 function Export-KustomizeRoot {
     param(
@@ -110,6 +113,9 @@ function Export-KustomizeRoot {
 }
 
 Export-KustomizeRoot -ManifestRoot (Join-Path $Root "ingress-nginx") -OutputFile (Join-Path $resolvedOutputDir "ingress-nginx.yml")
+if ($OllamaGpuMode -ne "cpu") {
+    Export-KustomizeRoot -ManifestRoot (Join-Path $Root "nvidia-device-plugin") -OutputFile (Join-Path $resolvedOutputDir "nvidia-device-plugin.yml")
+}
 Export-KustomizeRoot -ManifestRoot $appRoot -OutputFile (Join-Path $resolvedOutputDir "app-$Environment.yml")
 
 if ($IncludeCloudflared) {
@@ -129,6 +135,7 @@ $metadata = [ordered]@{
     includeCloudflared = [bool]$IncludeCloudflared
     includeMinioBootstrapJob = [bool]$IncludeMinioBootstrapJob
     ollamaGpuMode = $OllamaGpuMode
+    useOllamaRuntimeClass = [bool]$UseOllamaRuntimeClass
     root = (Resolve-Path $Root).Path
     appRoot = (Resolve-Path $appRoot).Path
     outputDir = $resolvedOutputDir

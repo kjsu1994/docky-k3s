@@ -64,6 +64,7 @@ function Test-ImageReferenceMissingDigest {
 
 $scanRoots = New-Object System.Collections.Generic.List[string]
 $scanRoots.Add((Join-Path $Root "manifests")) | Out-Null
+$scanRoots.Add((Join-Path $Root "nvidia-device-plugin")) | Out-Null
 if ($IncludeJobs) {
     $scanRoots.Add((Join-Path $Root "jobs")) | Out-Null
 }
